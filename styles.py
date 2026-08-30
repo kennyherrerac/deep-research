@@ -1,3 +1,5 @@
+
+
 # ---------- Custom styling ----------
 CUSTOM_CSS = """
 :root {
@@ -82,14 +84,3 @@ footer {
     display: none !important;
 }
 """
-
-THEME = gr.themes.Base(
-    primary_hue="indigo",
-    neutral_hue="slate",
-).set(
-    body_background_fill="#0f1117",
-    block_background_fill="#171a23",
-    block_border_color="#262b3a",
-    block_label_text_color="#9aa0ac",
-    body_text_color="#e7e9ee",
-)
