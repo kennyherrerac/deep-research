@@ -25,6 +25,6 @@ a clean, well presented HTML email with an appropriate subject line.
 """
 
 email_agent = Agent(name="email_aggent", 
-                        tools=send_email_tool, 
+                        tools=[send_email_tool], 
                         instructions=INSTRUCTIONS, 
                         model=MODEL_NAME)
