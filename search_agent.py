@@ -14,8 +14,8 @@ settings = ModelSettings(tool_choice="required")
 tools = [WebSearchTool()]
 
 search_agent = Agent(name="search_agent", 
-                            tools=tools, 
-                            settings=settings,
+                            tools=tools,
+                            model_settings=settings,
                             instructions=INSTRUCTIONS,
                             model=MODEL_NAME)
 
