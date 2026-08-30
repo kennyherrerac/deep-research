@@ -1,3 +1,9 @@
+---
+title: Deep_Research
+app_file: app.py
+sdk: gradio
+sdk_version: 6.14.0
+---
 # Material Description Quality Agent
 
 An AI agent that reviews SAP material master descriptions (MAKTX-style text) for typos, inconsistent abbreviations, and potential duplicates, and suggests a cleaned-up version — via a simple CSV-in, CSV-out Gradio interface.
