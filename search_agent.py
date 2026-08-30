@@ -9,7 +9,6 @@ You are a research assistant. Given a search term, you search the web for that t
 produce a concise summary of the results. The summary must 2-3 paragraphs and less than 300 words.
 Capture the main points and be succinct. Reply only with the summary.
 """
-task = "Most popular AI Agent frameworks in 2026"
 
 settings = ModelSettings(tool_choice="required")
 tools = [WebSearchTool()]
