@@ -19,8 +19,3 @@ search_agent = Agent(name="search_agent",
                             instructions=INSTRUCTIONS,
                             model=MODEL_NAME)
 
-
-
-
-
-
