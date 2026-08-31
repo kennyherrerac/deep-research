@@ -1,70 +1,81 @@
-from dotenv import load_dotenv
-from agents import Runner, trace
 import asyncio
-
-# Agents
+from dotenv import load_dotenv
+from agents import Agent, Runner, trace
+from config import MODEL_NAME
+from clarifier_agent import clarifier_agent
+from planner_agent import planner_agent
 from search_agent import search_agent
-from planner_agent import planner_agent, WebSearchItem, WebSearchPlan
 from writer_agent import writer_agent, ReportData
 from email_agent import email_agent
-from clarifier_agent import clarifier_agent
 
-# --- Import of env variables
 load_dotenv(override=True)
 
 
+# ---------- Agents as tools ----------
+planner_tool = planner_agent.as_tool(
+    tool_name="plan_searches",
+    tool_description=(
+        "Takes the research query. Returns a list of web search terms, each with a reason. "
+        "Call this once, first."
+    ),
+)
+
+search_tool = search_agent.as_tool(
+    tool_name="search",
+    tool_description=(
+        "Searches the web for ONE search term and returns a short summary. "
+        "Input format: 'Search term: <term>\nReason for searching: <reason>'. "
+        "Call once per term in the plan."
+    ),
+)
+
+writer_tool = writer_agent.as_tool(
+    tool_name="write_report",
+    tool_description=(
+        "Writes the final report. Input must contain the original query AND all search "
+        "summaries collected so far. Call once, after all searches are done."
+    ),
+)
+
+email_tool = email_agent.as_tool(
+    tool_name="send_email",
+    tool_description=(
+        "Sends the finished report by email. Input is the full markdown report. "
+        "Call exactly once, at the very end, after write_report."
+    ),
+)
+
+
+# ---------- Manager ----------
+MANAGER_INSTRUCTIONS = """
+You are a research manager. You produce a researched report by using your tools in order.
+
+Follow these steps exactly:
+1. Call plan_searches once with the user's query. It returns a list of search terms.
+2. For EACH term in that plan, call search once. Do not skip terms and do not combine
+   several terms into one call. Keep every summary you get back.
+3. Call write_report once, passing the original user query together with all the
+   summaries from step 2.
+4. Call send_email once with the markdown report from step 3.
+
+Then reply with the full markdown report as your final answer.
+
+If a search fails, continue with the remaining terms rather than stopping.
+"""
+
+manager_agent = Agent(
+    name="manager_agent",
+    instructions=MANAGER_INSTRUCTIONS,
+    tools=[planner_tool, search_tool, writer_tool, email_tool],
+    model=MODEL_NAME,
+)
+
+
+# ---------- Clarification (stays outside the manager) ----------
 async def get_clarifying_questions(query: str) -> list[str]:
-    print("Clarifying the query...")
     result = await Runner.run(clarifier_agent, query)
     return result.final_output.questions
 
-
-async def plan_searches(query: str) -> WebSearchPlan:
-    print("Planning searches...")
-    result = await Runner.run(planner_agent, query)
-    plan = result.final_output
-    print(f"Will do {len(plan.searches)} searches")
-    return plan
-
-
-async def search(item: WebSearchItem) -> str | None:
-    input_message = f"Search term: {item.query}\nReason for searching: {item.reason}"
-    try:
-        result = await Runner.run(search_agent, input_message)
-        return result.final_output
-    except Exception as exc:
-        print(f"Search failed for '{item.query}': {exc}")
-        return None
-
-
-async def perform_searches(plan: WebSearchPlan) -> list[str]:
-    tasks = [asyncio.create_task(search(item)) for item in plan.searches]
-    results = [r for r in await asyncio.gather(*tasks) if r is not None]
-    print(f"Finished searching, {len(results)}/{len(plan.searches)} succeeded")
-    return results
-
-
-async def write_report(query: str, search_results: list[str]) -> ReportData:
-    print("Thinking about report...")
-    input_message = f"Original query: {query}\nSummarized search results: {search_results}"
-    result = await Runner.run(writer_agent, input_message)
-    print("Finished writing report")
-    return result.final_output
-
-
-async def send_report_email(report: ReportData) -> None:
-    print("Writing email...")
-    await Runner.run(email_agent, report.markdown_report)
-    print("Email sent")
-
-
-async def main(task: str) -> ReportData:
-    with trace("Deep research trace"):
-        plan = await plan_searches(task)
-        search_results = await perform_searches(plan)
-        report = await write_report(task, search_results)
-        await send_report_email(report)
-    return report
 
 def build_enriched_query(query: str, questions: list[str], answers: str) -> str:
     if not questions or not answers.strip():
@@ -74,23 +85,20 @@ def build_enriched_query(query: str, questions: list[str], answers: str) -> str:
 
     return f"""Original query: {query}
 
-            The user was asked these clarifying questions:
-            {numbered}
+The user was asked these clarifying questions:
+{numbered}
 
-            The user's answers (freeform, may not map one-to-one to the questions):
-            {answers.strip()}"""
-        
-        
+The user's answers (freeform, may not map one-to-one to the questions):
+{answers.strip()}"""
 
-async def cli_run(task: str, answers: str) -> ReportData:
-    questions = await get_clarifying_questions(task)
-    print("Questions:", questions)
-    enriched = build_enriched_query(task, questions, answers)
-    return await main(enriched)
+
+# ---------- Entry point ----------
+async def main(query: str) -> str:
+    with trace("Deep research (manager)"):
+        result = await Runner.run(manager_agent, query, max_turns=30)
+    return result.final_output
 
 
 if __name__ == "__main__":
-    task = "Most commercially successful implementation of MCP and Agents in ERP, CRM and salesforce data"
-    answers = "Model Context Protocol. Salesforce the platform. Global, last 2 years."
-    report = asyncio.run(cli_run(task, answers))
-    print(report.markdown_report)
+    task = "Most popular AI Agent frameworks in 2026"
+    print(asyncio.run(main(task)))
