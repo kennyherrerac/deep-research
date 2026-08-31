@@ -7,9 +7,16 @@ from search_agent import search_agent
 from planner_agent import planner_agent, WebSearchItem, WebSearchPlan
 from writer_agent import writer_agent, ReportData
 from email_agent import email_agent
+from clarifier_agent import clarifier_agent
 
 # --- Import of env variables
 load_dotenv(override=True)
+
+
+async def get_clarifying_questions(query: str) -> list[str]:
+    print("Clarifying the query...")
+    result = await Runner.run(clarifier_agent, query)
+    return result.final_output.questions
 
 
 async def plan_searches(query: str) -> WebSearchPlan:
@@ -59,8 +66,31 @@ async def main(task: str) -> ReportData:
         await send_report_email(report)
     return report
 
+def build_enriched_query(query: str, questions: list[str], answers: str) -> str:
+    if not questions or not answers.strip():
+        return query
+
+    numbered = "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1))
+
+    return f"""Original query: {query}
+
+            The user was asked these clarifying questions:
+            {numbered}
+
+            The user's answers (freeform, may not map one-to-one to the questions):
+            {answers.strip()}"""
+        
+        
+
+async def cli_run(task: str, answers: str) -> ReportData:
+    questions = await get_clarifying_questions(task)
+    print("Questions:", questions)
+    enriched = build_enriched_query(task, questions, answers)
+    return await main(enriched)
+
 
 if __name__ == "__main__":
-    task = "Most popular AI Agent frameworks in 2026"
-    final_report = asyncio.run(main(task))
-    print(final_report.markdown_report)
+    task = "Most commercially successful implementation of MCP and Agents in ERP, CRM and salesforce data"
+    answers = "Model Context Protocol. Salesforce the platform. Global, last 2 years."
+    report = asyncio.run(cli_run(task, answers))
+    print(report.markdown_report)
