@@ -33,8 +33,6 @@ clarifier_agent = Agent(
     output_type=ClarifyingQuestions,
 )
 
-query = "AI Agents 2026"
-
 async def get_clarifying_questions(query: str) -> list[str]:
     print("Clarifying the query...")
     result = await Runner.run(clarifier_agent, query)
